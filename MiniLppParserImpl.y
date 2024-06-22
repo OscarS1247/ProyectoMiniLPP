@@ -1,7 +1,6 @@
 %define parse.error verbose
 %define api.pure full
 
-
 %parse-param {MiniLppParser& parser}
 
 %code top {
@@ -23,10 +22,12 @@ void yyerror(const MiniLppParser& parser, const char *msg)
 %code requires {
 #include <string>
 #include <variant>
+#include <MiniLppAst.hpp>
+
 
 class MiniLppParser;
 
-using ParserValueType = std::variant<std::string, int, char, double>;
+using ParserValueType = AstNode *;
 
 #define YYSTYPE ParserValueType
 #define YYSTYPE_IS_DECLARED 1
@@ -88,38 +89,56 @@ using ParserValueType = std::variant<std::string, int, char, double>;
 %token False "falso"
 %token Write "escriba"
 %token Read "leer"
+%token Elseif "sino si"
+%token Is "es"
+%token Lea "lea"
+%token Type "tipo"
 
 
 
 %%
 
-programa: Begin block End
-      | defblock Begin block End
-      | defblock funcprocblocck Begin block End
-      | funcprocblocck Begin block End
+start: program { parser.createCodeFile($1->generateCode()); }
+
+program: Begin block End {$$ = new Program((Definitions*)nullptr, (Definitions*)nullptr, (FunProcList*)nullptr, (Stmt*)$2);}
+      | definitions Begin block End {$$ = new Program((Definitions*)$1, (Definitions*)nullptr, (FunProcList*)nullptr, (Stmt*)$3);}
+      | typesDefs Begin block End {$$ = new Program((Definitions*)nullptr, (Definitions*)$1, (FunProcList*)nullptr, (Stmt*)$3);}
+      | funcprocblock Begin block End {$$ = new Program((Definitions*)nullptr, (Definitions*)nullptr, (FunProcList*)$1, (Stmt*)$3);}
+      | definitions typesDefs Begin block End {$$ = new Program((Definitions*)$1, (Definitions*)$2, (FunProcList*)nullptr, (Stmt*)$4);}
+      | typesDefs definitions Begin block End {$$ = new Program((Definitions*)$2, (Definitions*)$1, (FunProcList*)nullptr, (Stmt*)$4);}
+      | definitions funcprocblock Begin block End {$$ = new Program((Definitions*)$1, (Definitions*)nullptr, (FunProcList*)$2, (Stmt*)$4);}
+      | typesDefs funcprocblock Begin block End {$$ = new Program((Definitions*)nullptr, (Definitions*)$1, (FunProcList*)$2, (Stmt*)$4);}
+      | typesDefs definitions funcprocblock Begin block End {$$ = new Program((Definitions*)$2, (Definitions*)$1, (FunProcList*)$3, (Stmt*)$5);}
+      | definitions typesDefs funcprocblock Begin block End {$$ = new Program((Definitions*)$1, (Definitions*)$2, (FunProcList*)$3, (Stmt*)$5);}
 ;
 
-block: block line
-      | line
+block: block line {$$ = new CodeStmt((AstNode*)$1, (AstNode*)$2);}
+      | line {$$ = $1;}
 ;
 
-line: write
-      | assignblock
-      | estructuras
-      | calls
-      | return
+line: write {$$ = $1;}
+      | assignblock {$$ = $1;}
+      | estructuras {$$ = $1;}
+      | calls {$$ = $1;}
+      | return {$$ = $1;}
 ;
 
 return: Return expr
 ;
 
-write: Write StringConst
-      | Write expr
+read: Lea id
 ;
 
-tipoVar: IntegerType
-      | CharType
-      | BoolType
+write: write Comma StringConst
+      | write Comma expr
+      | Write StringConst {$$ = new WriteStatement((Expr*)$2);}
+      | Write expr {$$ = new WriteStatement((Expr*)$2);}
+;
+
+tipoVar: IntegerType {$$ = $1;}
+      | CharType {$$ = $1;}
+      | BoolType {$$ = $1;}
+      | Identifier {$$ = $1;}
 ;
 
 idArreglo: Identifier OpenBracket expr CloseBracket
@@ -129,39 +148,38 @@ programcall: Identifier OpenParen CloseParen
       | Identifier OpenParen entradaParam CloseParen
 ;
 
-id: Identifier
-      | idArreglo
-      | programcall
+id: Identifier {$$ = $1;}
+      | idArreglo {$$ = $1;}
+      | programcall {$$ = $1;}
 ;
 
 valorBool: True
       | False
 ;
 
-booloperator: Equals
-      | EqualTo
-      | NotEqualTo
-      | LessThan
-      | LessThanOrEqual
-      | GreaterThan
-      | GreaterThanOrEqual
+defSimple: defSimple Comma Identifier {$$ = new VariableList((VariableList*)$1, new VariableExpr((Id*)$3));}
+      | Identifier {$$ = new VariableExpr((Id*)$1);}
 ;
 
-defSimple: defSimple Comma Identifier
-      | tipoVar Identifier
-;
-
-def: defSimple
+def: tipoVar defSimple {$$ = new Def((String*)$1, (VariableList*)$2);}
       | ArrayType OpenBracket expr CloseBracket Of tipoVar Identifier
 ;
 
-defblock: defblock def
-      | def
+definitions: definitions def {$$ = new Definitions((Definitions*)$1, (Def*)$2);}
+      | def {$$ = $1;} 
 ;
 
-assignment: Identifier Assignment expr 
-      | Identifier Assignment valorBool
-      | Identifier Assignment CharType
+typesDefs: typesDefs types
+      | types {$$ = $1;}
+;
+
+types: Type Identifier Is tipoVar
+      | Type Identifier Is ArrayType OpenBracket expr CloseBracket Of tipoVar
+;
+
+assignment: Identifier Assignment expr {$$ = new AssignStatement((Id*)$1, (Expr*)$3);}
+      | Identifier Assignment valorBool {$$ = new AssignStatement((Id*)$1, (Expr*)$3);}
+      | Identifier Assignment CharType {$$ = new AssignStatement((Id*)$1, (Expr*)$3);}
 ;
 
 assignarray: idArreglo Assignment expr
@@ -169,97 +187,116 @@ assignarray: idArreglo Assignment expr
       | idArreglo Assignment valorBool
 ;
 
-assignblock: assignment
-      | assignarray
+assignblock: assignment {$$ = $1;}
+      | assignarray {$$ = $1;}
 ;
 
-expr: expr Plus term 
-      | expr Minus term 
-      | term 
+expr: expr Plus term {$$ = new Add((Expr*)$1, (Expr*)$3);}
+      | expr Minus term {$$ = new Sub((Expr*)$1, (Expr*)$3);}
+      | term {$$ = $1;}
 ;
-term: term Multiply factor 
-      | term Divide factor 
-      | term Modulus factor 
-      | factor 
+
+term: term Multiply factor {$$ = new Mul((Expr*)$1, (Expr*)$3);}
+      | term Divide factor {$$ = new Div((Expr*)$1, (Expr*)$3);}
+      | term Modulus factor {$$ = new Mod((Expr*)$1, (Expr*)$3);}
+      | factor {$$ = $1;}
 ;
+
 factor: OpenParen expr CloseParen 
-      | Number 
+      | Number {$$ = $1;}
       | Hex 
       | Binary
-      | id  
+      | id {$$ = $1;}
 ;
 
 expresionBool: expresionBool Or termBool 
-      | termBool 
+      | termBool {$$ = $1;}
 ;
 
 termBool: termBool And factorBool 
-      | factorBool 
+      | factorBool {$$ = $1;}
 ;
 
 factorBool: OpenParen expresionBool CloseParen 
-      | operacionBool 
+      | operacionBool {$$ = $1;}
 ;
 
-operacionBool: expr booloperator expr
+operacionBool: expr EqualTo expr {$$ = new Equal((Expr*)$1, (Expr*)$3);}
+      | expr NotEqualTo expr {$$ = new NonEqual((Expr*)$1, (Expr*)$3);}
+      | expr LessThan expr {$$ = new LessThanTo((Expr*)$1, (Expr*)$3);}
+      | expr LessThanOrEqual expr {$$ = new LessEqual((Expr*)$1, (Expr*)$3);}
+      | expr GreaterThan expr {$$ = new GreaterThanTo((Expr*)$1, (Expr*)$3);}
+      | expr GreaterThanOrEqual expr {$$ = new GreaterEqual((Expr*)$1, (Expr*)$3);}
 ;
 
-tipoParam: Variable tipoVar Identifier
+tipoParam: Variable tipoVar Identifier 
       | Variable ArrayType OpenBracket Number CloseBracket Of tipoVar Identifier
       | tipoVar Identifier
       | ArrayType OpenBracket Number CloseBracket Of tipoVar Identifier
 ;
 
 listaParams: listaParams Comma tipoParam
-      | tipoParam
-;
-entradaParam: entradaParam Comma expr
-      | expr
+      | tipoParam {$$ = $1;}
 ;
 
-procedure: Procedure Identifier OpenParen listaParams CloseParen defblock Begin block End
+entradaParam: entradaParam Comma expr
+      | expr {$$ = $1;}
+;
+
+procedure: Procedure Identifier OpenParen listaParams CloseParen definitions Begin block End
       | Procedure Identifier OpenParen listaParams CloseParen Begin block End
-      | Procedure Identifier OpenParen CloseParen defblock Begin block End
+      | Procedure Identifier OpenParen CloseParen definitions Begin block End
       | Procedure Identifier OpenParen CloseParen Begin block End
-      | Procedure Identifier defblock Begin block End
+      | Procedure Identifier definitions Begin block End
       | Procedure Identifier Begin block End
 ;
 
-function: Function Identifier OpenParen listaParams CloseParen Colon tipoVar defblock Begin block End
+function: Function Identifier OpenParen listaParams CloseParen Colon tipoVar definitions Begin block End
       | Function Identifier OpenParen listaParams CloseParen Colon tipoVar Begin block End
-      | Function Identifier OpenParen CloseParen Colon tipoVar defblock Begin block End
+      | Function Identifier OpenParen CloseParen Colon tipoVar definitions Begin block End
       | Function Identifier OpenParen CloseParen Colon tipoVar Begin block End
-      | Function Identifier Colon tipoVar defblock Begin block End
+      | Function Identifier Colon tipoVar definitions Begin block End
       | Function Identifier Colon tipoVar Begin block End
 ;
 
-funcprocblocck: funcprocblocck procedure
-      | funcprocblocck function
-      | procedure
-      | function
+funcprocblock: funcprocblock procedure
+      | funcprocblock function 
+      | procedure {$$ = $1;}
+      | function {$$ = $1;}
 ;
 
 calls: Call programcall
       | Call Identifier
 ;
 
-repetir: Repeat block Until expresionBool
+repeatstatement: Repeat block Until expresionBool {$$ = new RepeatStatement((Expr*)$4, (Stmt*)$2);}
 ;
 
-mientras: While expresionBool Until block End While
+whilestatement: While expresionBool Do block End While {$$ = new WhileStatement((Expr*)$2, (Stmt*)$4);}
 ;
 
-para: For assignment Until expr Until block End Until
+forstatement: For assignment Until expr Do block End For {$$ = new ForStatement((AssignStatement*)$2,(Expr*)$4, (Stmt*)$6);}
 ;
 
-si: If expresionBool Then block End If
-      | If expresionBool Then block Else block End If
+ifstatement: If expresionBool Then block End If { $$ = new IfStatement((Expr*)$2, (Stmt*)$4, (Stmt*)nullptr); }
+      | If expresionBool Then block elsestatement End If { $$ = new IfStatement((Expr*)$2, (Stmt*)$4, (Stmt*)$5); }
+      | If expresionBool Then block elseifstatement End If { $$ = new IfStatement((Expr*)$2, (Stmt*)$4, (Stmt*)$5); }
 ;
 
-estructuras: repetir
-      | mientras
-      | para
-      | si
+elsestatement: Else block { $$ = $2; }
+;
+
+elseifstatement: Elseif expresionBool Then block { $$ = new ElseIfStatement((Expr*)$2, (Stmt*)$4);}
+;
+
+elseblock: elseblock elseifstatement { $$ = new ElseIfBlock((Stmt*)$1, (Stmt*)$2); }
+      | elseifstatement { $$ = $1; }
+;
+
+estructuras: repeatstatement {$$ = $1;}
+      | whilestatement {$$ = $1;}
+      | forstatement {$$ = $1;}
+      | ifstatement {$$ = $1;}
 ;
 
 

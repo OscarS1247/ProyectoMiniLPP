@@ -3,12 +3,16 @@
 
 #include "MiniLppParserImpl.hpp"
 #include "MiniLppLexer.hpp"
+#include <iostream>
+#include <fstream>
+#include <vector>
+using namespace std;
 
 class MiniLppParser
 {
 public:
-    MiniLppParser(MiniLppLexer& lexer)
-      : lexer(lexer)
+    MiniLppParser(MiniLppLexer& lexer, const string& filename)
+      : lexer(lexer) ,  filename(filename)
     {}
 
     int parse();
@@ -19,12 +23,16 @@ public:
     double getValue() const
     { return value; }
 
+    void createCodeFile(const string& code);
+
     MiniLppLexer& getLexer()
     { return lexer; }
 
 private:
+    std::vector<AstNode *> statements;
     double value;
     MiniLppLexer& lexer;
+    const string filename;  
 };
 
 #endif

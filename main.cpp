@@ -6,16 +6,20 @@
 void printToken(Token token, const ParserValueType& lval) {
     switch (token) {
         case Token::Identifier:
-            std::cout << "Identifier: " << std::get<std::string>(lval) << std::endl;
+            //std::cout << "Identifier: " << std::get<std::string>(lval) << std::endl;
+            std::cout << "Identifier" << std::endl;
             break;
         case Token::Number:
-            std::cout << "Number: " << std::get<int>(lval) << std::endl;
+            std::cout << "Number" << std::endl;    
+            //std::cout << "Number: " << std::get<int>(lval) << std::endl;
             break;
         case Token::CharConst:
-            std::cout << "CharConst: " << std::get<char>(lval) << std::endl;
+            std::cout << "CharConst" << std::endl;
+            //std::cout << "CharConst: " << std::get<char>(lval) << std::endl;
             break;
         case Token::StringConst:
-            std::cout << "StringConst: " << std::get<std::string>(lval) << std::endl;
+            std::cout << "StringConst" << std::endl;
+            //std::cout << "StringConst: " << std::get<std::string>(lval) << std::endl;
             break;
         case Token::IntegerType:
             std::cout << "Keyword: int" << std::endl;
@@ -167,8 +171,6 @@ void printToken(Token token, const ParserValueType& lval) {
     }
 }
 
-
-
 void analyzeLexical(std::istream& source_file) {
     MiniLppLexer lexer(source_file);
     ParserValueType lval;
@@ -183,12 +185,13 @@ void analyzeLexical(std::istream& source_file) {
 }
 
 int main(int argc, char* argv[]) {
-    if (argc != 2) {
-        std::cerr << "Usage: " << argv[0] << " <source-file>" << std::endl;
+    if (argc != 3) {
+        std::cerr << "Usage: " << argv[0] << " <source-file>" << " <output-file>" << std::endl;
         return 1;
     }
 
     const char* filename = argv[1];
+    const char* output_filename = argv[2];
     std::ifstream source_file(filename, std::ios::in);
 
     if (!source_file) {
@@ -205,7 +208,7 @@ int main(int argc, char* argv[]) {
 
     try {
         MiniLppLexer lexer(source_file);
-        MiniLppParser parser(lexer);
+        MiniLppParser parser(lexer, output_filename);
 
         int result = parser.parse();
 

@@ -1,0 +1,661 @@
+%option lang = "C++"
+
+%decls %{
+    #include <string>
+    #include <iostream>
+    #include <algorithm>
+    #include <unordered_map> 
+
+
+    using string = std::string;
+    using SymbolTable = std::unordered_map<string, string>;
+%}
+
+%{
+    #include "MiniLppAst.hpp"
+
+    int count = 0;
+    SymbolTable symbolTable;
+
+    void resetCount() {
+        count = 0;
+    }
+
+	int getCount(){
+		return count;
+	}
+
+	int addCount(int n)
+	{
+		return count += n;
+	}
+%}
+
+%node AstNode %abstract %typedef ={
+    %nocreate string code;
+    %nocreate string place;
+}
+
+%node Stmt AstNode %abstract %typedef
+
+%node Expr AstNode %abstract 
+%node DefExpr Expr %abstract %typedef
+
+//done!
+%node Program AstNode = {
+    Definitions *defs;
+    Definitions *types_defs;
+    FunProcList *fun_proc_list;
+    Stmt *codeblock;
+}
+
+%node Definitions Stmt= {
+    Definitions *List;
+    Def *stmt;
+}
+
+//modificar
+%node FunProcList Stmt = {
+   string name;
+}
+
+%node CodeStmt Stmt = {
+    AstNode *codelist;
+    AstNode *codeline;
+}
+
+%node Def Stmt = {
+    String *type;
+    VariableList *variables;
+}
+
+//done!
+%node Type Expr = {
+    string type;
+}
+
+//done!
+%node VariableList DefExpr = {
+    VariableList *list;
+    VariableExpr *stmt;
+}
+
+//done!
+%node VariableExpr DefExpr = {
+    Id *name;
+}
+
+//done!
+%node Id Expr = {
+    string id;
+}
+
+//done!
+%node Num Expr = {
+    int value;
+}
+
+//done!
+%node Boolean Expr = {
+    int value;
+}
+
+//done!
+%node String Expr = {
+    string value;
+}
+
+//done!
+%node BinaryOperations Expr %abstract = {
+    Expr *left;
+    Expr *right;
+}
+
+//done!
+%node Add BinaryOperations
+%node Sub BinaryOperations
+%node Mul BinaryOperations
+%node Div BinaryOperations
+%node GreaterThanTo BinaryOperations
+%node GreaterEqual BinaryOperations
+%node LessThanTo BinaryOperations
+%node LessEqual BinaryOperations
+%node Equal BinaryOperations
+%node NonEqual BinaryOperations
+%node Mod BinaryOperations
+
+//done!
+%node AssignStatement Stmt = {
+    Id *name;
+    Expr *value;
+}
+
+//test
+%node WriteExprStatement Stmt = {
+    Expr *expr;
+}
+
+%node WriteStatement Stmt = {
+    Expr *expr;
+}
+
+%node IfStatement Stmt = {
+    Expr *cond;
+    Stmt *trueStmt;
+    Stmt *falseStmt;
+}
+
+%node ElseIfBlock Stmt = {
+    Stmt *trueStmt;
+    Stmt *falseStmt;
+}
+
+%node ElseIfStatement Stmt = {
+    Expr *cond;
+    Stmt *stmt;
+}
+
+%node WhileStatement Stmt = {
+    Expr * cond;
+    Stmt * block;
+}
+
+%node RepeatStatement Stmt = {
+    Expr * cond;
+    Stmt * block;
+}
+
+%node ForStatement Stmt = {
+    AssignStatement *assignment;
+    Expr *cond;
+    Stmt *block;
+}
+
+%operation %virtual string generateCode(AstNode *node);
+%operation %virtual string generateDefCode(DefExpr *node, string type);
+
+generateCode(Program) {
+    string statements = "";
+    string space = "\n\t";
+
+    if (node->defs != nullptr)
+        statements = node->defs->generateCode();
+    
+    node->code = space + "sub esp, " + std::to_string(count) + "\n";
+    
+    string codeblock = node->codeblock->generateCode();
+    resetCount();
+    node->code += "prg:" + space + 
+            "push ebp" + space + 
+            "mov ebp, esp" + space + 
+            "sub esp, "+ std::to_string(count) + "\n";
+    node->code += "\n" + codeblock;
+ 
+    return node->code;
+}
+
+generateCode(Num) {
+    string value = std::to_string(node->value);
+    node->place = value;
+    return "";
+}
+
+generateCode(Id) {
+    string id = symbolTable[node->id];
+    node->place = id;
+    return "";
+}
+
+generateCode(Boolean) {
+    string value = std::to_string(node->value);
+    node->place = value;
+    return "";
+}
+
+generateCode(String) {
+    string value = node->value;
+    node->place = value;
+    return "";
+}
+
+generateCode(Type) {
+    string type = node->type;
+    node->place = type;
+    return type;
+}
+
+generateCode(WriteExprStatement){
+    string space = "\n\t";
+    string expr = node->expr->generateCode();
+    string expr_place = node->expr->place;
+
+    node->code = expr + "\n" +
+                space + "mov eax, " + expr_place + "\n" +
+                space + "push eax\n" +
+                space + "call print_int\n" +
+                space + "add esp, 4\n";
+
+    return node->code;
+
+}
+
+generateCode(Add) {
+    string space = "\n\t";
+    string left = node->left->generateCode();
+    string left_place = node->left->place;
+    string right = node->right->generateCode();
+    string right_place = node->right->place;
+
+    node->code = left + "\n" + right;
+
+    int count = addCount(4);
+    node->code += space + "mov edx, " + left_place +
+                space + "add edx, " + right_place +
+                space + "mov dword [ebp - " + std::to_string(count) + "], edx\n";
+
+    node->place = "dword [ebp - " + std::to_string(count) + "]";
+
+    return node->code;
+}
+
+generateCode(Sub) {
+    string space = "\n\t";
+    string left = node->left->generateCode();
+    string left_place = node->left->place;
+    string right = node->right->generateCode();
+    string right_place = node->right->place;
+
+    node->code = left + "\n" + right;
+
+    int count = addCount(4);
+    node->code += space + "mov edx, " + left_place +
+                space + "sub edx, " + right_place +
+                space + "mov dword [ebp - " + std::to_string(count) + "], edx\n";
+
+    node->place = "dword [ebp - " + std::to_string(count) + "]";
+
+    return node->code;
+}
+
+generateCode(Mul) {
+    string space = "\n\t";
+    string left = node->left->generateCode();
+    string left_place = node->left->place;
+    string right = node->right->generateCode();
+    string right_place = node->right->place;
+
+    node->code = left + "\n" + right;
+
+    int count = addCount(4);
+    node->code += space + "mov eax, " + left_place +
+                space + "imul eax, " + right_place +
+                space + "mov dword [ebp - " + std::to_string(count) + "], eax\n";
+
+    node->place = "dword [ebp - " + std::to_string(count) + "]";
+
+    return node->code;
+}
+
+generateCode(Div) {
+    string space = "\n\t";
+    string left = node->left->generateCode();
+    string left_place = node->left->place;
+    string right = node->right->generateCode();
+    string right_place = node->right->place;
+
+    node->code = left + "\n" + right;
+    
+    int count = addCount(4);
+    node->code += space + "mov eax, " + left_place +
+                space + "idiv eax, " + right_place +
+                space + "mov dword [ebp - " + std::to_string(count) + "], eax\n";
+    
+    node->place = "dword [ebp - " + std::to_string(count) + "]";
+
+    return node->code;
+}
+
+generateCode(Mod) {
+    string space = "\n\t";
+    string left = node->left->generateCode();
+    string left_place = node->left->place;
+    string right = node->right->generateCode();
+    string right_place = node->right->place;
+
+    node->code = left + "\n" + right;
+
+    int count = addCount(4);
+    node->code += space + "mov eax, " + left_place +
+                space + "idiv eax, " + right_place +
+                space + "mov dword [ebp - " + std::to_string(count) + "], edx\n";
+
+    node->place = "dword [ebp - " + std::to_string(count) + "]";
+
+    return node->code;
+}
+
+generateCode(GreaterThanTo) {
+    string space = "\n\t";
+    string left = node->left->generateCode();
+    string left_place = node->left->place;
+    string right = node->right->generateCode();
+    string right_place = node->right->place;
+
+    node->code = left + "\n" + right;
+
+    int count = addCount(4);
+    node->code += space + "mov eax, " + left_place +
+                space + "cmp eax, " + right_place +
+                space + "jg greater_than_" + std::to_string(count) + "\n" +
+                space + "mov dword [ebp - " + std::to_string(count) + "], 0\n" +
+                space + "jmp end_greater_than_" + std::to_string(count) + "\n" +
+                "greater_than_" + std::to_string(count) + ":\n"+
+                space + "mov dword [ebp - " + std::to_string(count) + "], 1\n" +
+                "end_greater_than_" + std::to_string(count) + ":\n";
+
+    node->place = "dword [ebp - " + std::to_string(count) + "]";
+
+    return node->code;
+}
+
+generateCode(GreaterEqual) {
+    string space = "\n\t";
+    string left = node->left->generateCode();
+    string left_place = node->left->place;
+    string right = node->right->generateCode();
+    string right_place = node->right->place;
+
+    node->code = left + "\n" + right;
+
+    int count = addCount(4);
+    node->code += space + "mov eax, " + left_place +
+                space + "cmp eax, " + right_place +
+                space + "jge greater_equal_" + std::to_string(count) + "\n" +
+                space + "mov dword [ebp - " + std::to_string(count) + "], 0\n" +
+                space + "jmp end_greater_equal_" + std::to_string(count) + "\n" +
+                "greater_equal_" + std::to_string(count) + ":\n" +
+                space + "mov dword [ebp - " + std::to_string(count) + "], 1\n" +
+                "end_greater_equal_" + std::to_string(count) + ":\n";
+
+    node->place = "dword [ebp - " + std::to_string(count) + "]";
+
+    return node->code;
+}
+
+generateCode(LessThanTo) {
+    string space = "\n\t";
+    string left = node->left->generateCode();
+    string left_place = node->left->place;
+    string right = node->right->generateCode();
+    string right_place = node->right->place;
+
+    node->code = left + "\n" + right;
+
+    int count = addCount(4);
+    node->code += space + "mov eax, " + left_place +
+                space + "cmp eax, " + right_place +
+                space + "jl less_than_" + std::to_string(count) + "\n" +
+                space + "mov dword [ebp - " + std::to_string(count) + "], 0\n" +
+                space + "jmp end_less_than_" + std::to_string(count) + "\n" +
+                "less_than_" + std::to_string(count) + ":\n" +
+                space + "mov dword [ebp - " + std::to_string(count) + "], 1\n" +
+                "end_less_than_" + std::to_string(count) + ":\n";
+
+    node->place = "dword [ebp - " + std::to_string(count) + "]";
+
+    return  node->code;
+}
+
+generateCode(LessEqual) {
+    string space = "\n\t";
+    string left = node->left->generateCode();
+    string left_place = node->left->place;
+    string right = node->right->generateCode();
+    string right_place = node->right->place;
+
+    node->code = left + "\n" + right;
+
+    int count = addCount(4);
+    node->code += space + "mov eax, " + left_place +
+                space + "cmp eax, " + right_place +
+                space + "jle less_equal_" + std::to_string(count) + "\n" +
+                space + "mov dword [ebp - " + std::to_string(count) + "], 0\n" +
+                space + "jmp end_less_equal_" + std::to_string(count) + "\n" +
+                "less_equal_" + std::to_string(count) + ":\n" +
+                space + "mov dword [ebp - " + std::to_string(count) + "], 1\n" +
+                "end_less_equal_" + std::to_string(count) + ":\n";
+
+    node->place = "dword [ebp - " + std::to_string(count) + "]";
+
+    return node->code;
+}
+
+generateCode(Equal) {
+    string space = "\n\t";
+    string left = node->left->generateCode();
+    string left_place = node->left->place;
+    string right = node->right->generateCode();
+    string right_place = node->right->place;
+
+    node->code = left + "\n" + right;
+
+    int count = addCount(4);
+    node->code += space + "mov eax, " + left_place +
+                space + "cmp eax, " + right_place +
+                space + "je equal_" + std::to_string(count) + "\n" +
+                space + "mov dword [ebp - " + std::to_string(count) + "], 0\n" +
+                space + "jmp end_equal_" + std::to_string(count) + "\n" +
+                "equal_" + std::to_string(count) + ":\n" +
+                space + "mov dword [ebp - " + std::to_string(count) + "], 1\n" +
+                "end_equal_" + std::to_string(count) + ":\n";
+
+    node->place = "dword [ebp - " + std::to_string(count) + "]";
+
+    return node->code;
+}
+
+generateCode(NonEqual) {
+    string space = "\n\t";
+    string left = node->left->generateCode();
+    string left_place = node->left->place;
+    string right = node->right->generateCode();
+    string right_place = node->right->place;
+
+    node->code = left + "\n" + right;
+
+    int count = addCount(4);
+    node->code += space + "mov eax, " + left_place +
+                space + "cmp eax, " + right_place +
+                space + "jne non_equal_" + std::to_string(count) + "\n" +
+                space + "mov dword [ebp - " + std::to_string(count) + "], 0\n" +
+                space + "jmp end_non_equal_" + std::to_string(count) + "\n" +
+                "non_equal_" + std::to_string(count) + ":\n" +
+                space + "mov dword [ebp - " + std::to_string(count) + "], 1\n" +
+                "end_non_equal_" + std::to_string(count) + ":\n";
+
+    node->place = "dword [ebp - " + std::to_string(count) + "]";
+
+    return node->code;
+}
+
+generateCode(AssignStatement) {
+    string space = "\n\t";
+    int _count = getCount();
+    string expr = node->value->generateCode(); 
+    string place = node->value->place; 
+    string name = node->name->id;
+
+    node->code = expr + "\n";
+
+    bool is_temp = place.at(0) == 'd';
+    if (is_temp) {
+        node->code += space + "mov eax, " + place + "\n" +
+                space + "mov " + symbolTable[name] + ", eax";
+    } else {
+        node->code += space + "mov " + symbolTable[name] + ", " + node->value->place;
+    }
+
+    node->place = symbolTable[name];
+    addCount(_count);
+    string code = node->code;
+
+    return node->code;
+}
+
+generateCode(Definitions){
+    string definitionsList = node->List->generateCode();
+    string codeBlock = node->stmt->generateCode();
+    node->code = definitionsList + "\n" + codeBlock;
+    return node->code;
+}
+
+generateCode(FunProcList){
+    return "";
+}
+
+generateCode(CodeStmt){
+    string code_list = node->codelist->generateCode();
+    string code_line = node->codeline->generateCode();
+    node->code = code_list + code_line;
+    return node->code;
+}
+
+generateCode(Def){
+    string type = node->type->generateCode();
+    string code = node->variables->generateDefCode(node->type->place);
+    node->code = code;
+    return node->code;
+}
+
+generateCode(VariableList){
+    return "";
+}
+
+generateCode(VariableExpr){
+    return "";
+}
+
+generateDefCode(VariableList){
+    string list = node->list->generateDefCode(type);
+    string statements = node->stmt->generateDefCode(type);
+    node->code = list + "\n" + statements;
+    return node->code;
+}
+
+generateDefCode(VariableExpr){
+    string id = node->name->id;
+    symbolTable[id] = "dword [ebp + " + std::to_string(addCount(4)) + "]";
+    node->place = symbolTable[id];
+    std::transform(type.begin(), type.end(), type.begin(), ::toupper);
+    node->code = "\tpush eax";
+    return node->code;
+
+}
+
+generateCode(IfStatement){
+    string space = "\n\t";
+    int count = addCount(4);
+    string condition = node->cond->generateCode();
+    string condition_place = node->cond->place;
+    string case_true = node->trueStmt->generateCode();
+    string case_false = "";
+
+    (node->falseStmt != nullptr) ? case_false = node->falseStmt->generateCode() : case_false = "";
+
+    node->code = condition + "\n";
+    node->code += space + "mov edx, 1" +
+                space + "cmp edx, " + condition_place +
+                space + "jne caso_falso"+ std::to_string(count) +
+                "\n" + case_true + space + "jmp fin_si" + std::to_string(count) +
+                "\n\ncaso_falso" + std::to_string(count)+":" +
+                case_false +
+                "\n\nfin_si"+ std::to_string(count) + ":";
+
+    return node->code;
+}
+
+generateCode(ElseIfStatement){
+    string space = "\n\t";
+    string condition = node->cond->generateCode();
+    string condition_place = node->cond->place;
+    string elseif_case = node->stmt->generateCode();
+
+    node->code = condition + "\n";
+    node->code += space + "mov edx, 1" +
+                space + "cmp edx, " + condition_place +
+                space + "jne fin_sino_si"+ std::to_string(count) +
+                "\n" + elseif_case +
+                "\n\nfin_sino`_si"+ std::to_string(count) + ":";
+
+    return node->code;
+}
+
+generateCode(ElseIfBlock) {    
+    string case_true = node->trueStmt->generateCode();
+    string case_false = node->falseStmt->generateCode();
+    node->code = case_true + case_false;
+    return node->code;
+}
+
+generateCode(WhileStatement){
+    string space = "\n\t";
+    string cond = node->cond->generateCode();
+    string condition_place = node->cond->place;
+    string block = node->block->generateCode();
+    int count = addCount(4);
+
+    node->code = "\nmientras" + std::to_string(count) + ":" +
+                cond +
+                space + "mov edx, 1" +
+                space + "cmp edx, " + condition_place +
+                space + "jne fin_mientras" + std::to_string(count) +
+                block + space + "jmp mientras" + std::to_string(count) +
+                "\nfin_mientras" + std::to_string(count) + ":";
+
+    return node->code;
+}
+
+generateCode(RepeatStatement){
+    string space = "\n\t";
+    string cond = node->cond->generateCode();
+    string condition_place = node->cond->place;
+    string block = node->block->generateCode();
+    int count = addCount(4);
+
+    node->code += "\nrepita" + std::to_string(count) + ":" +
+                block + "\n" +cond +
+                space + "mov edx, 1";
+                space + "cmp edx, " + condition_place +
+                space + "jne repita" + std::to_string(count) +
+                space + "jmp fin_repita" + std::to_string(count) +
+                "\nfin_repita" + std::to_string(count) + ":";
+
+    return node->code;
+}
+
+generateCode(ForStatement){
+    string space = "\n\t";
+    string assignment = node->assignment->generateCode();
+    string assignment_place = node->assignment->place;
+    string cond = node->cond->generateCode();
+    string condition_place = node->cond->place;
+    string block = node->block->generateCode();
+    int count = addCount(4);
+
+    node->code = assignment;
+
+    node->code += "\npara" + std::to_string(count) + ":" +
+                space + "mov edx, " + assignment_place;
+                space + "cmp edx, " + condition_place;
+                space + "jg fin_para`" + std::to_string(count);
+                block;
+                space + "add " + assignment_place + ", 1";
+                space +"`jmp para" + std::to_string(count);
+                "\nfin_para" + std::to_string(count) + ":";
+
+    return node->code;
+}
+
+generateCode(WriteStatement){
+    return "";
+}

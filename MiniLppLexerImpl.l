@@ -30,11 +30,11 @@
 "/*"        { BEGIN(comment); }
 \"          { BEGIN(str); }
 \'[^\n]\'                  { return Token::CharConst; }
-"entero"                      { return Token::IntegerType; }
+"entero"                   { *lval = new String(std::string(yytext)); return Token::IntegerType; }
 "real"                     { return Token::RealType; }
 "cadena"                   { return Token::StringType; }
-"caracter"                     { return Token::CharType; }
-"booleano"                  { return Token::BoolType; }
+"caracter"                  { *lval = new String(std::string(yytext)); return Token::CharType; }
+"booleano"                  { *lval = new String(std::string(yytext)); return Token::BoolType; }
 "arreglo"                    { return Token::ArrayType; }
 "de"                       { return Token::Of; }
 "funcion"                 { return Token::Function; }
@@ -46,13 +46,14 @@
 "si"                       { return Token::If; }
 "entonces"                     { return Token::Then; }
 "sino"                     { return Token::Else; }
+"sino si"                  { return Token::Elseif; }
 "para"                      { return Token::For; }
 "mientras"                    { return Token::While; }
 "haga"                       { return Token::Do; }
 "escriba"                    { return Token::Write; }
 "leer"                     { return Token::Read; }
-"verdadero"                     { return Token::True; }
-"falso"                    { return Token::False; }
+"verdadero"                     {*lval = new Boolean(1); return Token::True; }
+"falso"                    { *lval = new Boolean(0); return Token::False; }
 "repita"                   { return Token::Repeat; }
 "hasta"                    { return Token::Until; }
 "y"                      { return Token::And; }
@@ -60,6 +61,9 @@
 "llamar"                     { return Token::Call; }
 ":"                        { return Token::Colon; }
 "retorne"                   { return Token::Return; }
+"tipo"                     { return Token::Type; }
+"es"                       { return Token::Is; }
+"lea"                      { return Token::Lea; }
 "+"                        { return Token::Plus; }
 "-"                        { return Token::Minus; }
 "*"                        { return Token::Multiply; }
@@ -81,11 +85,11 @@
 ","                        { return Token::Comma; }
 "0x"([0-9a-fA-F])+         { return Token::Hex; }
 "0b"[0-1]+                 { return Token::Binary; }
-[0-9]+(\.[0-9]+)?          { *lval = std::atoi(yytext); return Token::Number; }
-[a-zA-Z_][a-zA-Z0-9_]*     { *lval = std::string(yytext); return Token::Identifier; }
+[0-9]+(\.[0-9]+)?	        { *lval = new Num(std::atof(yytext)); return Token::Number; }
+[a-zA-Z_][a-zA-Z0-9_]*	    { *lval = new Id(std::string(yytext)); return Token::Identifier; }
 .                          { std::cerr << "Invalid symbol: " << yytext[0] << '\n'; return Token::Error; }
 
-<str>[^"]*                 {  }
+<str>[^"]*                 { *lval = new String(yytext); }
 <str>\"                    { BEGIN(INITIAL); return Token::StringConst; }
 
 

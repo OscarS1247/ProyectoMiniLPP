@@ -64,7 +64,11 @@ enum class Token: int {
     True = 309,
     False = 310,
     Write = 311,
-    Read = 312
+    Read = 312,
+    Elseif = 313,
+    Is = 314,
+    Lea = 315,
+    Type = 316,
 };
 
 
